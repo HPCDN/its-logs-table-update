@@ -2,7 +2,7 @@ import os
 import json
 import datetime as dt
 from typing import Iterable, Set, List, Tuple
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import Flask, request, jsonify, abort
 
@@ -23,8 +23,13 @@ except Exception:
 
 # ------------------ Helpers ------------------
 
-def _now_in_tz(tzname: str) -> dt.datetime:
-    return dt.datetime.now(ZoneInfo(tzname))
+def _now_in_tz(tzname: str) -> dt:
+    try:
+        return dt.now(ZoneInfo(tzname))
+    except ZoneInfoNotFoundError:
+        # fallback to UTC
+        print(f"[WARN] Time zone '{tzname}' not found, falling back to UTC")
+        return dt.now(ZoneInfo("UTC"))
 
 def _default_dates(now: dt.datetime) -> List[str]:
     yday = now - dt.timedelta(days=1)
@@ -124,8 +129,11 @@ def _auth_ok(req) -> Tuple[bool, str]:
 # ------------------ Flask App ------------------
 
 app = Flask(__name__)
-
 @app.get("/")
+def entrypoint():
+    return jsonify({"status": "ok", "service": "its-logs-scanner", "time": dt.datetime.utcnow().isoformat()})
+
+@app.get("/health")
 def health():
     return jsonify({"status": "ok", "service": "its-logs-scanner", "time": dt.datetime.utcnow().isoformat()})
 
