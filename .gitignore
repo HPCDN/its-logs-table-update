@@ -66,3 +66,27 @@ local.settings.json  # if you also experiment with Azure Functions locally
 
 # Deployment artifacts
 app.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.pkl
+
+# Virtual env
+.venv/
+env/
+venv/
+
+# Environment files
+.env
+.env.*
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

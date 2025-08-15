@@ -5,7 +5,6 @@ from typing import Iterable, Set, List, Tuple
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import Flask, request, jsonify, abort
-
 from azure.core.exceptions import ResourceExistsError
 from azure.storage.blob import BlobServiceClient, ContainerClient
 from azure.data.tables import TableClient, TableServiceClient
@@ -13,33 +12,27 @@ from azure.data.tables import TableClient, TableServiceClient
 # ---- load .env for local runs only ----
 try:
     from dotenv import load_dotenv, find_dotenv
-    # App Service sets WEBSITE_SITE_NAME; if it's missing, we're probably local.
-    if not os.environ.get("WEBSITE_SITE_NAME"):
-        # Do NOT override existing env (e.g., real secrets or CI vars)
+    if not os.environ.get("WEBSITE_SITE_NAME"):  # running locally
         load_dotenv(find_dotenv(), override=False)
 except Exception:
-    # If python-dotenv isn't installed or .env missing, just continue.
     pass
 
 # ------------------ Helpers ------------------
 
-def _now_in_tz(tzname: str) -> dt:
+def _now_in_tz(tzname: str) -> dt.datetime:
+    """Get current time in a given timezone, fallback to UTC if not found."""
     try:
-        return dt.now(ZoneInfo(tzname))
+        return dt.datetime.now(ZoneInfo(tzname))
     except ZoneInfoNotFoundError:
-        # fallback to UTC
         print(f"[WARN] Time zone '{tzname}' not found, falling back to UTC")
-        return dt.now(ZoneInfo("UTC"))
+        return dt.datetime.now(ZoneInfo("UTC"))
 
 def _default_dates(now: dt.datetime) -> List[str]:
+    """Return [today, yesterday] in YYYY/MM/DD format."""
     yday = now - dt.timedelta(days=1)
     return [now.strftime("%Y/%m/%d"), yday.strftime("%Y/%m/%d")]
 
 def _container_client(blob_cfg: dict) -> ContainerClient:
-    """
-    Preferred: connection string (blob_cfg["connectionString"]) + container.
-    Also supports SAS or MSI if ever needed.
-    """
     container = blob_cfg.get("container") or os.environ.get("CONTAINER")
     if not container:
         raise ValueError("blob.container is required")
@@ -60,7 +53,6 @@ def _container_client(blob_cfg: dict) -> ContainerClient:
         svc = BlobServiceClient(account_url=sas_url)
         return svc.get_container_client(container)
 
-    # managed-identity fallback
     account_url = blob_cfg.get("accountUrl") or os.environ.get("BLOB_ACCOUNT_URL")
     if not account_url:
         raise ValueError("blob.accountUrl is required for managed-identity mode.")
@@ -113,13 +105,12 @@ def _insert_unique(table: TableClient, partition: str, container: str, path: str
         "Status": "pending"
     }
     try:
-        table.create_entity(entity=entity)  # 409 if exists
+        table.create_entity(entity=entity)
         return True
     except ResourceExistsError:
         return False
 
 def _auth_ok(req) -> Tuple[bool, str]:
-    """Optional lightweight auth: set AUTH_TOKEN env and send header X-Auth-Token from Logic App."""
     expected = os.environ.get("AUTH_TOKEN")
     if not expected:
         return True, "auth-disabled"
@@ -129,6 +120,7 @@ def _auth_ok(req) -> Tuple[bool, str]:
 # ------------------ Flask App ------------------
 
 app = Flask(__name__)
+
 @app.get("/")
 def entrypoint():
     return jsonify({"status": "ok", "service": "its-logs-scanner", "time": dt.datetime.utcnow().isoformat()})
@@ -150,7 +142,6 @@ def scan_binzip():
         scan_cfg = body.get("scan", {})
         locale_cfg = body.get("locale", {})
 
-        # Defaults (env)
         blob_cfg.setdefault("credential", "connection-string")
         blob_cfg.setdefault("connectionString", os.environ.get("BLOB_CONNECTION_STRING"))
         blob_cfg.setdefault("container", os.environ.get("CONTAINER", "raw-logs-autoload"))
@@ -165,17 +156,14 @@ def scan_binzip():
         dates = scan_cfg.get("dates") or _default_dates(now)
         suffix = scan_cfg.get("suffix", ".bin.zip")
 
-        # Clients
         container_client = _container_client(blob_cfg)
         table_client = _table_client(table_cfg)
 
-        # Sources
         if scan_cfg.get("sources"):
             sources = set(scan_cfg["sources"])
         else:
             sources = _discover_sources(container_client)
 
-        # Scan + insert
         scanned_prefixes = 0
         files_found = 0
         rows_inserted = 0
