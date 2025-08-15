@@ -1,0 +1,68 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Packages / builds
+*.egg-info/
+.eggs/
+dist/
+build/
+wheels/
+pip-wheel-metadata/
+pip-wheel-cache/
+
+# Virtual envs
+.venv/
+venv/
+env/
+ENV/
+.venv*/
+
+# Logs & runtime
+*.log
+logs/
+*.pid
+
+# Databases (Flask local)
+instance/
+*.sqlite3
+*.db
+
+# Tests / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+htmlcov/
+
+# Type checkers / linters
+.mypy_cache/
+.dmypy.json
+.pytype/
+.pyre/
+.ruff_cache/
+
+# Editors / IDE
+.vscode/
+.idea/
+*.iml
+*.code-workspace
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Env & secrets
+.env
+.env.*
+*.env
+*.secrets
+secrets.json
+local.settings.json  # if you also experiment with Azure Functions locally
+
+# Deployment artifacts
+app.zip

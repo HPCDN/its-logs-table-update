@@ -1,0 +1,21 @@
+{
+  "blob": {
+    "credential": "connection-string",
+    "connectionString": "@{parameters('BlobConnectionString')}",
+    "container": "raw-logs-autoload"
+  },
+  "table": {
+    "credential": "connection-string",
+    "connectionString": "@{parameters('TableConnectionString')}",
+    "tableName": "ITSLogs",
+    "partition": "raw-logs-autoload"
+  },
+  "scan": {
+    "dates": [
+      "@{formatDateTime(addDays(utcNow(),0),'yyyy/MM/dd')}",
+      "@{formatDateTime(addDays(utcNow(),-1),'yyyy/MM/dd')}"
+    ],
+    "suffix": ".bin.zip"
+  },
+  "locale": { "timezone": "Europe/Berlin" }
+}
