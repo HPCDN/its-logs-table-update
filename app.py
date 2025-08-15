@@ -9,10 +9,10 @@ from azure.core.exceptions import ResourceExistsError
 from azure.storage.blob import BlobServiceClient, ContainerClient
 from azure.data.tables import TableClient, TableServiceClient
 
-# ---- load .env for local runs only ----
+# ---- Load .env for local runs ----
 try:
     from dotenv import load_dotenv, find_dotenv
-    if not os.environ.get("WEBSITE_SITE_NAME"):  # running locally
+    if not os.environ.get("WEBSITE_SITE_NAME"):  # Probably local
         load_dotenv(find_dotenv(), override=False)
 except Exception:
     pass
@@ -20,7 +20,6 @@ except Exception:
 # ------------------ Helpers ------------------
 
 def _now_in_tz(tzname: str) -> dt.datetime:
-    """Get current time in a given timezone, fallback to UTC if not found."""
     try:
         return dt.datetime.now(ZoneInfo(tzname))
     except ZoneInfoNotFoundError:
@@ -28,7 +27,6 @@ def _now_in_tz(tzname: str) -> dt.datetime:
         return dt.datetime.now(ZoneInfo("UTC"))
 
 def _default_dates(now: dt.datetime) -> List[str]:
-    """Return [today, yesterday] in YYYY/MM/DD format."""
     yday = now - dt.timedelta(days=1)
     return [now.strftime("%Y/%m/%d"), yday.strftime("%Y/%m/%d")]
 
@@ -38,50 +36,41 @@ def _container_client(blob_cfg: dict) -> ContainerClient:
         raise ValueError("blob.container is required")
 
     mode = (blob_cfg.get("credential") or "connection-string").lower()
-
     if mode == "connection-string":
         conn = blob_cfg.get("connectionString") or os.environ.get("BLOB_CONNECTION_STRING")
         if not conn:
-            raise ValueError("Blob connection string missing (blob.connectionString or BLOB_CONNECTION_STRING).")
-        svc = BlobServiceClient.from_connection_string(conn)
-        return svc.get_container_client(container)
+            raise ValueError("Blob connection string missing.")
+        return BlobServiceClient.from_connection_string(conn).get_container_client(container)
 
     if mode == "sas-url":
         sas_url = blob_cfg.get("sasUrl")
         if not sas_url:
             raise ValueError("blob.sasUrl is required for sas-url mode.")
-        svc = BlobServiceClient(account_url=sas_url)
-        return svc.get_container_client(container)
+        return BlobServiceClient(account_url=sas_url).get_container_client(container)
 
     account_url = blob_cfg.get("accountUrl") or os.environ.get("BLOB_ACCOUNT_URL")
     if not account_url:
         raise ValueError("blob.accountUrl is required for managed-identity mode.")
-    svc = BlobServiceClient(account_url=account_url)
-    return svc.get_container_client(container)
+    return BlobServiceClient(account_url=account_url).get_container_client(container)
 
 def _table_client(table_cfg: dict) -> TableClient:
     mode = (table_cfg.get("credential") or "connection-string").lower()
-    table_name = table_cfg.get("tableName") or os.environ.get("TABLE_NAME") or "ITSLogs"
+    table_name = table_cfg.get("tableName") or os.environ.get("TABLE_NAME", "test")  # local default = test
 
     if mode == "managed-identity":
         account_url = table_cfg.get("accountUrl") or os.environ.get("TABLE_ACCOUNT_URL")
         if not account_url:
             raise ValueError("table.accountUrl is required for managed-identity mode.")
-        svc = TableServiceClient(endpoint=account_url)
-        return svc.get_table_client(table_name=table_name)
+        return TableServiceClient(endpoint=account_url).get_table_client(table_name=table_name)
 
-    conn = (
-        table_cfg.get("connectionString")
-        or os.environ.get("TABLE_CONNECTION_STRING")
-        or os.environ.get("TABLES_CONNECTION_STRING")
-    )
+    conn = table_cfg.get("connectionString") or os.environ.get("TABLE_CONNECTION_STRING") or os.environ.get("TABLES_CONNECTION_STRING")
     if not conn:
-        raise ValueError("Table connection string missing (table.connectionString or TABLE_CONNECTION_STRING).")
+        raise ValueError("Table connection string missing.")
     return TableClient.from_connection_string(conn, table_name=table_name)
 
 def _discover_sources(container: ContainerClient) -> Set[str]:
     sources: Set[str] = set()
-    pager = container.list_blobs(name_starts_with="", results_per_page=1000).by_page()
+    pager = container.list_blobs(results_per_page=1000).by_page()
     for page in pager:
         for b in page:
             parts = b.name.split("/", 1)
@@ -148,7 +137,7 @@ def scan_binzip():
 
         table_cfg.setdefault("credential", "connection-string")
         table_cfg.setdefault("connectionString", os.environ.get("TABLE_CONNECTION_STRING") or os.environ.get("TABLES_CONNECTION_STRING"))
-        table_cfg.setdefault("tableName", os.environ.get("TABLE_NAME", "ITSLogs"))
+        table_cfg.setdefault("tableName", os.environ.get("TABLE_NAME", "test"))  # Always default to test locally
         table_cfg.setdefault("partition", os.environ.get("PARTITION", blob_cfg["container"]))
 
         tzname = locale_cfg.get("timezone") or os.environ.get("LOCAL_TIMEZONE", "Europe/Berlin")
